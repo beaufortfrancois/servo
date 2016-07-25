@@ -1323,10 +1323,13 @@ impl<Message, LTF, STF> Constellation<Message, LTF, STF>
         }
     }
 
-    fn handle_alert(&mut self, pipeline_id: PipelineId, message: String, sender: IpcSender<bool>) {
+    fn handle_alert(&mut self,
+                    pipeline_id: PipelineId,
+                    message: String,
+                    sender: IpcSender<bool>) {
         let display_alert_dialog = if PREFS.is_mozbrowser_enabled() {
             let parent_pipeline_info = self.pipelines.get(&pipeline_id).and_then(|source| source.parent_info);
-            if let Some(_) = parent_pipeline_info {
+            if parent_pipeline_info.is_some() {
                 let root_pipeline_id = self.root_frame_id
                     .and_then(|root_frame_id| self.frames.get(&root_frame_id))
                     .map(|root_frame| root_frame.current.0);
@@ -1441,6 +1444,7 @@ impl<Message, LTF, STF> Constellation<Message, LTF, STF>
             let root = self.root_frame_id.is_none() || self.root_frame_id == Some(frame_id);
             self.compositor_proxy.send(ToCompositorMsg::LoadComplete(back, forward, root));
         }
+        self.handle_subframe_loaded(pipeline_id);
     }
 
     fn handle_dom_load(&mut self, pipeline_id: PipelineId) {
@@ -1455,8 +1459,6 @@ impl<Message, LTF, STF> Constellation<Message, LTF, STF>
         if webdriver_reset {
             self.webdriver.load_channel = None;
         }
-
-        self.handle_subframe_loaded(pipeline_id);
     }
 
     fn handle_traverse_history_msg(&mut self,
@@ -2073,7 +2075,7 @@ impl<Message, LTF, STF> Constellation<Message, LTF, STF>
         }
 
         // If there are pending loads, wait for those to complete.
-        if self.pending_frames.len() > 0 {
+        if !self.pending_frames.is_empty() {
             return ReadyToSave::PendingFrames;
         }
 
@@ -2089,7 +2091,10 @@ impl<Message, LTF, STF> Constellation<Message, LTF, STF>
             let pipeline_id = frame.current.0;
 
             let pipeline = match self.pipelines.get(&pipeline_id) {
-                None => { warn!("Pipeline {:?} screenshot while closing.", pipeline_id); continue; },
+                None => {
+                    warn!("Pipeline {:?} screenshot while closing.", pipeline_id);
+                    continue;
+                },
                 Some(pipeline) => pipeline,
             };
 
